@@ -350,9 +350,10 @@ def main():
 
     # generate class visualization via octavewise gradient ascent
     output_image = inversion(new_net, phi_x0, octaves, debug=True)
-    # normalize image
+    # normalize image = vl_imsc
     output_image = output_image - output_image.min()
     output_image = output_image/output_image.max()
+    output_image = 255*np.clip(output_image, 0, 1)
 
     # save result image
     path = save_image(output_folder, filename, output_image)
