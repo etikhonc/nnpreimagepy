@@ -25,34 +25,29 @@ site.addsitedir(settings.caffe_root)
 import numpy as np
 import shutil
 import os
-from os.path import basename
 
 import random
 import PIL.Image
 import sys
 import math
-import matplotlib.pyplot as plt
 
+# setuo caffe
 pycaffe_root = settings.caffe_root # substitute your path here
 sys.path.insert(0, pycaffe_root)
 import caffe
 
-fc_layers = settings.fc_layers
-conv_layers = settings.conv_layers
-
-mean = np.load(settings.model_mean)
-mean = mean.squeeze()
-
 if settings.gpu:
   caffe.set_mode_gpu()
 
+# load models
 from alexnet import AlexNet
+from cliquecnn import CliqueCNN
 
-# Define input transformer
+
+# define input transformer
 transformer = caffe.io.Transformer({'data': (1, 3, 227, 227)})
 transformer.set_transpose('data', (2, 0, 1))
 transformer.set_channel_swap('data', (2, 1, 0))  # the reference model has channels in BGR order instead of RGB
-transformer.set_mean('data', mean.mean(1).mean(1))
 transformer.set_raw_scale('data', 1.0)
 # ------------------------------------------------------------------------------------------------------------------
 
@@ -301,67 +296,83 @@ def main():
         }
     ]
 
-    # Load reference network which one want to investigate
-    net = caffe.Classifier(settings.model_definition, settings.model_path, caffe.TEST)
+    for m in range(settings.nModels):
 
-    # get original input size of network
-    original_w = net.blobs['data'].width
-    original_h = net.blobs['data'].height
+        if settings.model[m] is None:
+            continue
 
-    # which class to visualize
-    layer = str(sys.argv[1])     # layer
-    ref_image_path = str(sys.argv[2])
-    filename = 'layer_' + layer
+        # =============== MODEL m ====================================
 
-    print "----------"
-    print "layer: %s\tref_image: %s\tfilename: %s" % (layer, ref_image_path, filename)
-    print "----------"
+        # models means
+        mean = np.load(settings.model[m]['mean'])
+        mean = mean.squeeze()
+        transformer.set_mean('data', mean.mean(1).mean(1))
 
-    # setup the output path
-    meanfile_name = os.path.splitext(basename(ref_image_path))[0]
-    output_folder = settings.output_folder + 'img_inv_' + meanfile_name + '/'
-    if not os.path.isdir(output_folder):
-        os.mkdir(output_folder)
+        # Load reference network which one want to investigate
+        net = caffe.Classifier(settings.model[m]['prototxt'], settings.model[m]['weights'], caffe.TEST)
 
-    # get the reference image
-    ref_image = np.float32(PIL.Image.open(ref_image_path))
-    image = preprocess(net, ref_image)
-    net.blobs['data'].data[0] = image.copy()
-    acts = net.forward(end=layer)
-    phi_x0 = acts[layer][0]     # reference representation
+        # get original input size of network
+        original_w = net.blobs['data'].width
+        original_h = net.blobs['data'].height
 
-    print 'shape of the reference layer: ', net.blobs[layer].data.shape
+        # setup the output path
+        output_folder = settings.model[m]['vis2folder'] + 'img_inv_' + \
+                        os.path.splitext(settings.model[m]['refimage_name'])[0] + '/'
+        if not os.path.isdir(output_folder):
+            os.mkdir(output_folder)
 
-    # initialize a new network
-    params = {'path2net': './models/' + settings.netname + '/test_' + layer + '.prototxt',
-              'path2solver': './models/' + settings.netname + '/solver_' + layer + '.prototxt',
-              'useGPU': settings.gpu, 'DEVICE_ID': 0}
-    if not os.path.isfile(params['path2net']):
-        if settings.netname == 'caffenet':
-            AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+        # which class to visualize
+        layers = settings.model[m]['layers']
+        for layer in layers:
 
-    new_net = caffe.Net(params['path2net'], settings.model_path, caffe.TEST)
+            filename = 'layer_' + layer
+            refimage_path = settings.model[m]['refimage_path'] + settings.model[m]['refimage_name']
 
-    assert new_net.blobs['data'].data.shape[2] == original_h
-    assert new_net.blobs['data'].data.shape[3] == original_w
+            print "----------"
+            print "layer: %s\tref_image: %s\tfilename: %s" % (layer, refimage_path, filename)
+            print "----------"
 
-    # if a specific output folder is provided
-    if len(sys.argv) == 4:
-        output_folder = str(sys.argv[3])
+            # get the reference image
+            ref_image = np.float32(PIL.Image.open(refimage_path))
+            image = preprocess(net, ref_image)
+            net.blobs['data'].data[0] = image.copy()
+            acts = net.forward(end=layer)
+            phi_x0 = acts[layer][0]     # reference representation
 
-    print "Output dir: %s" % output_folder
-    print "-----------"
+            print 'shape of the reference layer: ', net.blobs[layer].data.shape
 
-    # generate class visualization via octavewise gradient ascent
-    output_image = inversion(new_net, phi_x0, octaves, debug=True)
-    # normalize image = vl_imsc
-    output_image = output_image - output_image.min()
-    output_image = output_image/output_image.max()
-    output_image = 255*np.clip(output_image, 0, 1)
+            # initialize a new network
+            params = {'path2net': './models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
+                      'path2solver': './models/' + settings.model[m]['name'] + '/solver_' + layer + '.prototxt',
+                      'useGPU': settings.gpu, 'DEVICE_ID': 0}
+            if not os.path.isfile(params['path2net']):
+                if settings.netname == 'caffenet':
+                    AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
 
-    # save result image
-    path = save_image(output_folder, filename, output_image)
-    print "Saved to %s" % path
+            new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
+
+            assert new_net.blobs['data'].data.shape[2] == original_h
+            assert new_net.blobs['data'].data.shape[3] == original_w
+
+            # if a specific output folder is provided
+            if len(sys.argv) == 4:
+                output_folder = str(sys.argv[3])
+
+            print "Output dir: %s" % output_folder
+            print "-----------"
+
+            # generate class visualization via octavewise gradient ascent
+            output_image = inversion(new_net, phi_x0, octaves, debug=True)
+            # normalize image = vl_imsc
+            output_image = output_image - output_image.min()
+            output_image = output_image/output_image.max()
+            output_image = 255*np.clip(output_image, 0, 1)
+
+            # save result image
+            path = save_image(output_folder, filename, output_image)
+            print "Saved to %s" % path
+
+        print '----------------------------------------------------------------------------------------------------'
 
 # ------------------------------------------------------------------------------------------------------------------
 
