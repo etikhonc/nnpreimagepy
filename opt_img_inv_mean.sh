@@ -1,5 +1,7 @@
 #!/bin/bash
 path2mean="/export/home/etikhonc/workspace/nn_visualizations/mfv/"
+#path2mean="/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/find_maxes_results/max_im/fc8_output/"
+
 N_ARGS=1
 # check the number of input parameters
 if [ "$#" -ne "${N_ARGS}" ]; then

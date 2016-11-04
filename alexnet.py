@@ -40,7 +40,7 @@ class AlexNet(object):
         proto = 'force_backward: true\n' + str(proto)
 
         # write the net to a file
-        f = open(params['path2train_net'], 'w')
+        f = open(params['path2net'], 'w')
         f.write(proto)
         f.close()
 
