@@ -182,7 +182,8 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
 def inversion(net, phi_x0, octaves, debug=True):
 
     # factor of the momentum
-    Z = np.linalg.norm(phi_x0)  # normalization constant
+    Z = np.linalg.norm(phi_x0)**2  # normalization constant
+
     print "Obj.val. norm. constant: ", Z
 
     # if debug save intermediate visualizations
