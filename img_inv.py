@@ -82,6 +82,7 @@ def reg_intensity(x, gamma):  # x: CxHxW
 
 # reg2 function and its' gradient: bounded variation
 def reg_tv(x, gamma):  # x: CxHxW
+
     HW = np.prod(x.shape[1:3])
 
     d1 = x[:, :, 1:] - x[:, :, 0:-1]
@@ -153,16 +154,16 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
     grad_loss[:, tau_x:tau_x+h, tau_y:tau_y+w] = grad_loss_crop
 
     # reg1: bounded range
-    # energy[1], grad_reg1 = reg_intensity(xt, const['reg1_alpha'])
-    # energy[1] *= const['reg1_C']
-    # grad_reg1 *= const['reg1_C']
-    grad_reg1 = np.zeros(xt.shape)
+    energy[1], grad_reg1 = reg_intensity(xt, const['reg1_alpha'])
+    energy[1] *= const['reg1_C']
+    grad_reg1 *= const['reg1_C']
+    # grad_reg1 = np.zeros(xt.shape)
 
     # reg2: TV
-    # energy[2], grad_reg2 = reg_tv(xt, const['reg2_beta'])
-    # energy[2] *= const['reg2_C']
-    # grad_reg2 *= const['reg2_C']
-    grad_reg2 = np.zeros(xt.shape)
+    energy[2], grad_reg2 = reg_tv(xt, const['reg2_beta'])
+    energy[2] *= const['reg2_C']
+    grad_reg2 *= const['reg2_C']
+    # grad_reg2 = np.zeros(xt.shape)
 
     # sum up the gradient and the loss values
     grad_t = grad_loss + grad_reg1 + grad_reg2
@@ -214,7 +215,7 @@ def inversion(net, phi_x0, octaves, debug=True):
         else:
             # use the image produced by the prev block of iterations
             tau = math.floor(o['jitterT']/2)
-            tmp_image = np.zeros(net.blobs['data'].shape)
+            tmp_image = np.zeros((3, h, w))
             tmp_image[:, tau:tau+h, tau:tau+w] = image
             image = tmp_image
             del tmp_image
@@ -284,18 +285,18 @@ def main():
             'reg2_beta': 2,         # see paper for the definition of the reg term
             'reg2_C': 0.0066        # normalization const 1/(V^beta), V=B/6.5
         },
-        # {
-        #     'iter_n': 50,           # number of iterations with the following parameters:
-        #     'lr_0': 5.33333,        # init learning rate: 0.05*B^2/alpha
-        #     'rho': 0.9,             # momentum
-        #     'B': 80,                # normalization constant
-        #     'B_plus': 2 * 80,       # pixel feasible region [-B_plus, B_plus]
-        #     'jitterT': 0,           # maximal hor/ver translation
-        #     'reg1_alpha': 6,        # see paper for the definition of the reg term
-        #     'reg1_C': 3.8147e-12,   # normalization const 1/(B^alpha)
-        #     'reg2_beta': 2,         # see paper for the definition of the reg term
-        #     'reg2_C': 0.0066        # normalization const 1/(V^beta), V=B/6.5
-        # }
+        {
+            'iter_n': 50,           # number of iterations with the following parameters:
+            'lr_0': 5.33333,        # init learning rate: 0.05*B^2/alpha
+            'rho': 0.9,             # momentum
+            'B': 80,                # normalization constant
+            'B_plus': 2 * 80,       # pixel feasible region [-B_plus, B_plus]
+            'jitterT': 0,           # maximal hor/ver translation
+            'reg1_alpha': 6,        # see paper for the definition of the reg term
+            'reg1_C': 3.8147e-12,   # normalization const 1/(B^alpha)
+            'reg2_beta': 2,         # see paper for the definition of the reg term
+            'reg2_C': 0.0066        # normalization const 1/(V^beta), V=B/6.5
+        }
     ]
 
     # Load reference network which one want to investigate
