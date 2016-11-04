@@ -25,6 +25,8 @@ site.addsitedir(settings.caffe_root)
 import numpy as np
 import shutil
 import os
+from os.path import basename
+
 import random
 import PIL.Image
 import sys
@@ -214,7 +216,7 @@ def inversion(net, phi_x0, octaves, debug=True):
             image = get_initial_image(h=h, w=w, sigma=o['B'], padding=o['jitterT'])
         else:
             # use the image produced by the prev block of iterations
-            tau = math.floor(o['jitterT']/2)
+            tau = int(math.floor(o['jitterT']/2))
             tmp_image = np.zeros((3, h, w))
             tmp_image[:, tau:tau+h, tau:tau+w] = image
             image = tmp_image
@@ -252,7 +254,7 @@ def inversion(net, phi_x0, octaves, debug=True):
 
         print "----------"
         # crop image of the initial network size (because of jitter)
-        tau = math.floor(o['jitterT']/2)
+        tau = int(math.floor(o['jitterT']/2))
         image = image[:, tau:tau+h, tau:tau+w]
     #
     # returning the resulting image
@@ -316,7 +318,8 @@ def main():
     print "----------"
 
     # setup the output path
-    output_folder = settings.output_folder + 'img_inv/'
+    meanfile_name = os.path.splitext(basename(ref_image_path))[0]
+    output_folder = settings.output_folder + 'img_inv_' + meanfile_name + '/'
     if not os.path.isdir(output_folder):
         os.mkdir(output_folder)
 
