@@ -316,6 +316,9 @@ def main():
         original_h = net.blobs['data'].height
 
         # setup the output path
+        if not os.path.isdir(settings.model[m]['vis2folder']):
+            os.mkdir(settings.model[m]['vis2folder'])
+
         output_folder = settings.model[m]['vis2folder'] + 'img_inv_' + \
                         os.path.splitext(settings.model[m]['refimage_name'])[0] + '/'
         if not os.path.isdir(output_folder):
@@ -341,13 +344,22 @@ def main():
 
             print 'shape of the reference layer: ', net.blobs[layer].data.shape
 
+            if not os.path.isdir('./models/' + settings.model[m]['name']):
+                os.mkdir('./models/' + settings.model[m]['name'])
+
             # initialize a new network
             params = {'path2net': './models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
                       'path2solver': './models/' + settings.model[m]['name'] + '/solver_' + layer + '.prototxt',
                       'useGPU': settings.gpu, 'DEVICE_ID': 0}
+
+            print settings.model[m]['name']
+
             if not os.path.isfile(params['path2net']):
-                if settings.netname == 'caffenet':
+                if settings.model[m]['name'] == 'caffenet':
                     AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+                if settings.model[m]['name'] == 'cliqueCNN_long_jump':
+                    CliqueCNN(net.blobs['data'].data.shape, net.blobs[layer].data.shape,
+                              num_classes=settings.model[m]['nLabels'], last_layer=layer, params=params)
 
             new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
 
