@@ -13,7 +13,9 @@ model[0]['name'] = 'caffenet'
 model[0]['weights'] = '/export/home/etikhonc/caffe-master/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel'
 model[0]['prototxt'] = '/export/home/etikhonc/caffe-master/models/bvlc_reference_caffenet/deploy.prototxt'
 model[0]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
-model[0]['layers'] = ['fc8']  # ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'fc6', 'fc7', 'fc8']
+model[0]['layers'] = ['conv1', 'relu1', 'pool1', 'norm1', 'conv2', 'relu2', 'pool2', 'norm2',
+                      'conv3', 'relu3', 'conv4', 'relu4', 'conv5', 'relu5', 'pool5',
+                      'fc6', 'relu6', 'fc7', 'relu7', 'fc8', ]
 model[0]['refimage_path'] = '/export/home/etikhonc/workspace/nn_visualizations/nnpreimagepy/'
 model[0]['refimage_name'] = 'red-fox.jpg'
 model[0]['vis2folder'] = './results_' + model[0]['name'] + '/'

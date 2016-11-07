@@ -39,6 +39,8 @@ import caffe
 if settings.gpu:
   caffe.set_mode_gpu()
 
+caffe.set_device(1)
+
 # load models
 from alexnet import AlexNet
 from cliquecnn import CliqueCNN
@@ -69,7 +71,7 @@ def reg_intensity(x, gamma):  # x: CxHxW
     n = np.sum(x*x, axis=0)
 
     # value of the function
-    val = np.sum(np.power(n, gamma/2.).flatten()) / x.size
+    val = np.sum(np.power(n, gamma/2.).flatten()) / HW
 
     # gradient
     dx = gamma/float(HW) * x * np.power(n, gamma/2.-1)
@@ -133,6 +135,7 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
 
     h = src.height
     w = src.width
+    HW = h*w
 
     # Jitter
     tau_x = random.randint(0, const['jitterT'])
@@ -169,7 +172,7 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
     # accumulated squared gradient
     acc_sq_grad = const['rho'] * acc_sq_grad + grad_t * grad_t
     # adaptive learning rate
-    lr_t = 1/(1/const['lr_0'] + np.sqrt(acc_sq_grad))
+    lr_t = 1/(1/(HW*const['lr_0']) + np.sqrt(acc_sq_grad))
 
     # step in the pixel values
     delta_xt = const['rho'] * delta_xt - lr_t * grad_t
@@ -200,8 +203,10 @@ def inversion(net, phi_x0, octaves, debug=True):
     print "start optimizing with SGD"
     for e, o in enumerate(octaves):
 
-        print "lr_0={}, rho={}".format(o['lr_0'], o['rho'])
-        print "----------"
+        # print "lr_0={}, rho={}".format(o['lr_0'], o['rho'])
+        # print "----------"
+
+        print_opt_params(o)
 
         w = net.blobs['data'].width
         h = net.blobs['data'].height
@@ -227,13 +232,13 @@ def inversion(net, phi_x0, octaves, debug=True):
             delta, acc_sq_grad, energy = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
 
             # print current info
-            print "iter: %s\t l2-loss: %.2f\t reg1: %.2f\t reg2: %.2f\t total_energy: %.2f" \
+            print "iter: %s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
                   % (iter, energy[0], energy[1], energy[2], energy[3])
 
             # save current images
             image = image + delta
 
-            # box constratint
+            # box constraint
             image_all_colors = np.sqrt(np.sum(image*image, axis=0))
             W = np.min(np.stack((np.ones(image_all_colors.shape), o['B_plus']/image_all_colors)), axis=0)
             image = image*np.array([W]*image.shape[0])
@@ -255,9 +260,23 @@ def inversion(net, phi_x0, octaves, debug=True):
     #
     # returning the resulting image
     image = deprocess(net, image)
-
     return image
 # ------------------------------------------------------------------------------------------------------------------
+
+
+def print_opt_params(params):
+    print "----------"
+    print 'number of iterations: ', params['iter_n']
+    print 'init learning rate: ', params['lr_0']
+    print 'momentum: ', params['rho']
+    print 'pixel value const B: ', params['B']
+    print 'box constraint: |reconstr|<=2B=', params['B_plus']
+    print 'jitter: ', params['jitterT']
+    print 'bounded range alpha: ', params['reg1_alpha']
+    print 'bounded range norm.const: ', params['reg1_C']
+    print 'Total Variation (TV) beta: ', params['reg2_beta']
+    print 'Total Variation (TV) norm.const: ', params['reg2_C']
+    print "----------"
 
 
 # save end image
@@ -277,7 +296,7 @@ def main():
             'rho': 0.9,             # momentum
             'B': 80,                # normalization constant
             'B_plus': 2*80,         # pixel feasible region [-B_plus, B_plus]
-            'jitterT': 3,           # maximal hor/ver translation
+            'jitterT': 1,           # maximal hor/ver translation !!! depends on the layer strides
             'reg1_alpha': 6,        # see paper for the definition of the reg term
             'reg1_C': 3.8147e-12,   # normalization const 1/(B^alpha)
             'reg2_beta': 2,         # see paper for the definition of the reg term
@@ -349,11 +368,9 @@ def main():
                 os.mkdir('./models/' + settings.model[m]['name'])
 
             # initialize a new network
-            params = {'path2net': './models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
-                      'path2solver': './models/' + settings.model[m]['name'] + '/solver_' + layer + '.prototxt',
+            params = {'path2net': os.getcwd() + '/models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
+                      'path2solver': os.getcwd() + '/models/' + settings.model[m]['name'] + '/solver_' + layer + '.prototxt',
                       'useGPU': settings.gpu, 'DEVICE_ID': 0}
-
-            print settings.model[m]['name']
 
             if not os.path.isfile(params['path2net']):
                 if settings.model[m]['name'] == 'caffenet':
@@ -363,6 +380,10 @@ def main():
                               num_classes=settings.model[m]['nLabels'], last_layer=layer, params=params)
 
             new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
+
+            # !!!!! Adaptive jitter range
+            receptiveFieldStride = np.load(str.split(params['path2net'], '.')[0] +'_stride.npy')
+            octaves[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1]/4))]) - 1
 
             assert new_net.blobs['data'].data.shape[2] == original_h
             assert new_net.blobs['data'].data.shape[3] == original_w
