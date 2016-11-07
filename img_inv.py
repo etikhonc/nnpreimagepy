@@ -18,6 +18,8 @@ November 2016
 import os
 os.environ['GLOG_minloglevel'] = '2'  # suprress Caffe verbose prints
 
+from google.protobuf import text_format
+
 import settings
 import site
 site.addsitedir(settings.caffe_root)
@@ -36,10 +38,10 @@ pycaffe_root = settings.caffe_root # substitute your path here
 sys.path.insert(0, pycaffe_root)
 import caffe
 
-if settings.gpu:
-  caffe.set_mode_gpu()
-
-caffe.set_device(1)
+#if settings.gpu:
+#  caffe.set_mode_gpu()
+caffe.set_mode_cpu()
+# caffe.set_device(1)
 
 # load models
 from alexnet import AlexNet
@@ -145,15 +147,12 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
     # l2-loss
     src.data[0] = xt_crop.copy()
     fw = net.forward()   # propagate the current image to the loss
-    bw = net.backward()  # back propagate the gradient
-    print bw.keys()
+    # bw = net.backward(diffs=['data', 'loss_l2'])  # back propagate the gradient
+    bw = net.backward(start='loss_l2')  # back propagate the gradient
 
     energy[0] = net.blobs['loss_l2'].data
     energy[0] *= 2*net.blobs['data'].data.shape[0]  # because of the normalization constant 1/2N in the loss function
     grad_loss = np.zeros(xt.shape)
-    # A = bw['data']
-    # B = net.blobs['data'].diff[0]
-    # print np.sum(((A-B) * (A-B)).flatten())
 
     # grad_loss[:, tau_x:tau_x+h, tau_y:tau_y+w] = bw['data'] / Z * 2*net.blobs['data'].data.shape[0]
     grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0] / Z * 2*net.blobs['data'].data.shape[0]
@@ -222,7 +221,7 @@ def inversion(net, phi_x0, octaves, debug=True):
             tau = int(math.floor(o['jitterT']/2))
             tmp_image = np.zeros((3, h, w))
             tmp_image[:, tau:tau+h, tau:tau+w] = preprocess(net, image)
-            image = tmp_image
+            image = tmp_image.copy()
             del tmp_image
 
         acc_sq_grad = np.zeros(image.shape, dtype=np.float32)
@@ -234,7 +233,7 @@ def inversion(net, phi_x0, octaves, debug=True):
             delta, acc_sq_grad, energy = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
 
             # print current info
-            print "iter: %s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
+            print "iter: %05s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
                   % (iter, energy[0], energy[1], energy[2], energy[3])
 
             # save current images
@@ -367,7 +366,7 @@ def main():
             acts = net.forward(end=layer)
             phi_x0 = acts[layer][0]     # reference representation
 
-            print 'shape of the reference layer: ', net.blobs[layer].data.shape
+            print 'shape of the reference layer: ', phi_x0.shape
 
             if not os.path.isdir('./models/' + settings.model[m]['name']):
                 os.mkdir('./models/' + settings.model[m]['name'])
