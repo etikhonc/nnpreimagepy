@@ -22,14 +22,14 @@ import settings
 import site
 site.addsitedir(settings.caffe_root)
 
-import numpy as np
-import shutil
-import os
-
-import random
-import PIL.Image
-import sys
 import math
+import numpy as np
+import PIL.Image
+import random
+import scipy.io as scipyio
+import scipy.stats
+import shutil
+import sys
 
 # setuo caffe
 pycaffe_root = settings.caffe_root # substitute your path here
@@ -115,11 +115,11 @@ def reg_tv(x, gamma):  # x: CxHxW
 
 
 def get_initial_image(h=227, w=227, sigma=60, padding=0):
+
     # generate initial random image
     image = 2*np.random.random((3, h+padding, w+padding)) - 1
-
     # from the initial code to the paper
-    m = np.percentile(image.flatten(), .95)
+    m = scipy.stats.mstats.mquantiles(image.flatten(), 0.95, alphap=0.5, betap=0.5)
     image = image/m*sigma/np.sqrt(3)
 
     return image
@@ -131,7 +131,7 @@ def get_initial_image(h=227, w=227, sigma=60, padding=0):
 def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
 
     src = net.blobs['data']
-    energy = (-1)*np.ones((4))
+    energy = np.ones((4))
 
     h = src.height
     w = src.width
@@ -144,14 +144,20 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
 
     # l2-loss
     src.data[0] = xt_crop.copy()
-    net.forward()   # propagate the current image to the loss
-    net.backward()  # back propagate the gradient
+    fw = net.forward()   # propagate the current image to the loss
+    bw = net.backward()  # back propagate the gradient
+    print bw.keys()
 
-    energy[0] = net.blobs['loss_l2'].data / Z
-    grad_loss_crop = net.blobs['data'].diff[0]
-    grad_loss_crop = grad_loss_crop / Z
+    energy[0] = net.blobs['loss_l2'].data
+    energy[0] *= 2*net.blobs['data'].data.shape[0]  # because of the normalization constant 1/2N in the loss function
     grad_loss = np.zeros(xt.shape)
-    grad_loss[:, tau_x:tau_x+h, tau_y:tau_y+w] = grad_loss_crop
+    # A = bw['data']
+    # B = net.blobs['data'].diff[0]
+    # print np.sum(((A-B) * (A-B)).flatten())
+
+    # grad_loss[:, tau_x:tau_x+h, tau_y:tau_y+w] = bw['data'] / Z * 2*net.blobs['data'].data.shape[0]
+    grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0] / Z * 2*net.blobs['data'].data.shape[0]
+    # grad_loss = np.zeros(xt.shape)
 
     # reg1: bounded range
     energy[1], grad_reg1 = reg_intensity(xt, const['reg1_alpha'])
@@ -185,9 +191,8 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
 def inversion(net, phi_x0, octaves, debug=True):
 
     # factor of the momentum
-    Z = np.linalg.norm(phi_x0)**2  # normalization constant
-
-    print "Obj.val. norm. constant: ", Z
+    Z = np.sum((phi_x0*phi_x0).flatten())  # normalization constant
+    print "Obj.val. norm. constant: ", 1/Z
 
     # if debug save intermediate visualizations
     debug_output = './tmp_inv/'
@@ -203,9 +208,6 @@ def inversion(net, phi_x0, octaves, debug=True):
     print "start optimizing with SGD"
     for e, o in enumerate(octaves):
 
-        # print "lr_0={}, rho={}".format(o['lr_0'], o['rho'])
-        # print "----------"
-
         print_opt_params(o)
 
         w = net.blobs['data'].width
@@ -219,7 +221,7 @@ def inversion(net, phi_x0, octaves, debug=True):
             # use the image produced by the prev block of iterations
             tau = int(math.floor(o['jitterT']/2))
             tmp_image = np.zeros((3, h, w))
-            tmp_image[:, tau:tau+h, tau:tau+w] = image
+            tmp_image[:, tau:tau+h, tau:tau+w] = preprocess(net, image)
             image = tmp_image
             del tmp_image
 
@@ -257,9 +259,10 @@ def inversion(net, phi_x0, octaves, debug=True):
         # crop image of the initial network size (because of jitter)
         tau = int(math.floor(o['jitterT']/2))
         image = image[:, tau:tau+h, tau:tau+w]
+        image = deprocess(net, image)
     #
     # returning the resulting image
-    image = deprocess(net, image)
+    # image = deprocess(net, image)
     return image
 # ------------------------------------------------------------------------------------------------------------------
 
@@ -330,6 +333,8 @@ def main():
 
         # Load reference network which one want to investigate
         net = caffe.Classifier(settings.model[m]['prototxt'], settings.model[m]['weights'], caffe.TEST)
+
+        print net.blobs.keys()
 
         # get original input size of network
         original_w = net.blobs['data'].width
