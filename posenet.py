@@ -14,9 +14,15 @@ class PoseNet(object):
     """ Constructor """
 
     def __init__(self, data_shape, label_shape, last_layer='fc8', params=[]):
-        self.data_shape = list(data_shape)
-        self.data = L.DummyData(shape=dict(dim=list(data_shape)))
-        self.label = L.DummyData(shape=dict(dim=list(label_shape)))
+        data_shape_list = list(data_shape)
+        data_shape_list[0] = 1
+
+        label_shape_list = list(label_shape)
+        label_shape_list[0] = 1
+
+        self.data_shape = data_shape_list
+        self.data = L.DummyData(shape=dict(dim=data_shape_list))
+        self.label = L.DummyData(shape=dict(dim=label_shape_list))
 
         self.last_layer = last_layer
         self.receptiveFieldStride = []  # cumprod of the stride values across the whole net

@@ -18,9 +18,15 @@ class CliqueCNN(object):
     """ Constructor """
 
     def __init__(self, data_shape, label_shape, num_classes=303, last_layer='fc8_output', params=[]):
-        self.data_shape = list(data_shape)
-        self.data = L.DummyData(shape=dict(dim=list(data_shape)))
-        self.label = L.DummyData(shape=dict(dim=list(label_shape)))
+        data_shape_list = list(data_shape)
+        data_shape_list[0] = 1
+
+        label_shape_list = list(label_shape)
+        label_shape_list[0] = 1
+
+        self.data_shape = data_shape_list
+        self.data = L.DummyData(shape=dict(dim=data_shape_list))
+        self.label = L.DummyData(shape=dict(dim=label_shape_list))
         self.num_classes = num_classes
 
         self.last_layer = last_layer
