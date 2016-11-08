@@ -140,7 +140,7 @@ class PoseNet(object):
             self.__network_end(n, n.conv5, params)
             return
 
-        n.relu5_e = L.ReLU(n.conv5, in_place=True) #, param=[dict(decay_mult=0)])
+        n.relu5_e = L.PReLU(n.conv5, in_place=True, param=[dict(decay_mult=0)])
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'relu5_e':
             self.__network_end(n, n.relu5_e, params)
