@@ -38,14 +38,15 @@ pycaffe_root = settings.caffe_root # substitute your path here
 sys.path.insert(0, pycaffe_root)
 import caffe
 
-#if settings.gpu:
-#  caffe.set_mode_gpu()
-caffe.set_mode_cpu()
-# caffe.set_device(1)
+if settings.gpu:
+    caffe.set_mode_gpu()
+    caffe.set_device(1)
+# caffe.set_mode_cpu()
 
 # load models
 from alexnet import AlexNet
 from cliquecnn import CliqueCNN
+from posenet import PoseNet
 
 
 # define input transformer
@@ -359,6 +360,17 @@ def main():
             print "layer: %s\tref_image: %s\tfilename: %s" % (layer, refimage_path, filename)
             print "----------"
 
+            # if a specific output folder is provided
+            if len(sys.argv) == 4:
+                output_folder = str(sys.argv[3])
+
+            print "Output dir: %s" % output_folder
+            print "-----------"
+
+            if os.path.isfile("%s/%s.jpg" % (output_folder, filename)):
+                print 'Inversion is already computed. Skipping the layer...'
+                continue
+
             # get the reference image
             ref_image = np.float32(PIL.Image.open(refimage_path))
             image = preprocess(net, ref_image)
@@ -377,11 +389,16 @@ def main():
                       'useGPU': settings.gpu, 'DEVICE_ID': 0}
 
             if not os.path.isfile(params['path2net']):
+                # caffenet
                 if settings.model[m]['name'] == 'caffenet':
                     AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+                # cliqueCNN
                 if settings.model[m]['name'] == 'cliqueCNN_long_jump':
                     CliqueCNN(net.blobs['data'].data.shape, net.blobs[layer].data.shape,
                               num_classes=settings.model[m]['nLabels'], last_layer=layer, params=params)
+                # posenet
+                if settings.model[m]['name'] == 'posenet_oet':
+                    PoseNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
 
             new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
 
@@ -392,15 +409,8 @@ def main():
             assert new_net.blobs['data'].data.shape[2] == original_h
             assert new_net.blobs['data'].data.shape[3] == original_w
 
-            # if a specific output folder is provided
-            if len(sys.argv) == 4:
-                output_folder = str(sys.argv[3])
-
-            print "Output dir: %s" % output_folder
-            print "-----------"
-
             # generate class visualization via octavewise gradient ascent
-            output_image = inversion(new_net, phi_x0, octaves, debug=True)
+            output_image = inversion(new_net, phi_x0, octaves, debug=False)
             # normalize image = vl_imsc
             output_image = output_image - output_image.min()
             output_image = output_image/output_image.max()

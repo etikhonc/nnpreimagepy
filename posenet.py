@@ -28,7 +28,6 @@ class PoseNet(object):
         self.receptiveFieldStride = []  # cumprod of the stride values across the whole net
 
         self.net = self.net(params=params)
-        # self.solver = self.solver(params)
 
         self.receptiveFieldStride = np.asarray(self.receptiveFieldStride)
         self.receptiveFieldStride = np.cumprod(self.receptiveFieldStride)
@@ -53,20 +52,13 @@ class PoseNet(object):
 
     def net(self, params=[]):
 
-        conv_param = [dict(lr_mult=0.01, decay_mult=1),  # weight_param
-                      dict(lr_mult=0.02, decay_mult=0)]  # learned_param
-
-        wfiller = dict(type='gaussian', std=0.01)
-        wfiller_fc = dict(type='gaussian', std=0.005)
-        bfiller = dict(type='constant', value=0.1)
-
         # initialize net and data layer
         n = caffe.NetSpec()
 
         # layer 0
         n.data = self.data
         # layer 1
-        n.conv1 = L.Convolution(n.data, kernel_size=11, num_output=96, stride=4, pad=0)
+        n.conv1 = L.Convolution(n.data, kernel_size=11, num_output=96, stride=4)
         self.receptiveFieldStride.append(4)
         if self.last_layer == 'conv1':
             self.__network_end(n, n.conv1, params)
@@ -91,7 +83,7 @@ class PoseNet(object):
             return
 
         # layer 2
-        n.conv2 = L.Convolution(n.norm1, kernel_size=5, num_output=256, stride=1, pad=2, group=2)
+        n.conv2 = L.Convolution(n.norm1, kernel_size=5, num_output=256, pad=2, group=2)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv2':
             self.__network_end(n, n.conv2, params)
@@ -116,7 +108,7 @@ class PoseNet(object):
             return
 
         # layer 3
-        n.conv3 = L.Convolution(n.norm2, kernel_size=3, num_output=384, stride=1, pad=1)
+        n.conv3 = L.Convolution(n.norm2, kernel_size=3, num_output=384, pad=1)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv3':
             self.__network_end(n, n.conv3, params)
@@ -129,7 +121,7 @@ class PoseNet(object):
             return
 
         # layer 4
-        n.conv4 = L.Convolution(n.relu3, kernel_size=3, num_output=384, stride=1, pad=1)
+        n.conv4 = L.Convolution(n.relu3, kernel_size=3, num_output=384, pad=1, group=2)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv4':
             self.__network_end(n, n.conv4, params)
@@ -142,19 +134,19 @@ class PoseNet(object):
             return
 
         # layer 5
-        n.conv5 = L.Convolution(n.relu4, kernel_size=3, num_output=256, stride=1, pad=1, group=2)
+        n.conv5 = L.Convolution(n.relu4, kernel_size=3, num_output=256, pad=1, group=2)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv5':
             self.__network_end(n, n.conv5, params)
             return
 
-        n.relu5_e = L.ReLU(n.conv5, in_place=True, param=[dict(decay_mult=0)])
+        n.relu5_e = L.ReLU(n.conv5, in_place=True) #, param=[dict(decay_mult=0)])
         self.receptiveFieldStride.append(1)
-        if self.last_layer == 'relu5':
-            self.__network_end(n, n.relu5, params)
+        if self.last_layer == 'relu5_e':
+            self.__network_end(n, n.relu5_e, params)
             return
 
-        n.pool5 = L.Pooling(n.relu5, pool=P.Pooling.MAX, kernel_size=3, stride=2)
+        n.pool5 = L.Pooling(n.relu5_e, pool=P.Pooling.MAX, kernel_size=3, stride=2)
         self.receptiveFieldStride.append(2)
         if self.last_layer == 'pool5':
             self.__network_end(n, n.pool5, params)
