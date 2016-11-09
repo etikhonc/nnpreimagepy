@@ -83,20 +83,20 @@ class AlexNet(object):
             self.__network_end(n, n.relu1, params)
             return
 
-        n.norm1 = L.LRN(n.relu1, local_size=5, alpha=1e-4, beta=0.75)
-        self.receptiveFieldStride.append(1)
-        if self.last_layer == 'norm1':
-            self.__network_end(n, n.norm1, params)
-            return
-
-        n.pool1 = L.Pooling(n.norm1, pool=P.Pooling.MAX, kernel_size=3, stride=2)
+        n.pool1 = L.Pooling(n.relu1, pool=P.Pooling.MAX, kernel_size=3, stride=2)
         self.receptiveFieldStride.append(2)
         if self.last_layer == 'pool1':
             self.__network_end(n, n.pool1, params)
             return
 
+        n.norm1 = L.LRN(n.pool1, local_size=5, alpha=1e-4, beta=0.75)
+        self.receptiveFieldStride.append(1)
+        if self.last_layer == 'norm1':
+            self.__network_end(n, n.norm1, params)
+            return
+
         # layer 2
-        n.conv2 = L.Convolution(n.pool1, kernel_size=5, num_output=256, stride=1, pad=2, group=2,
+        n.conv2 = L.Convolution(n.norm1, kernel_size=5, num_output=256, stride=1, pad=2, group=2,
                                 param=conv_param, weight_filler=wfiller, bias_filler=bfiller)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv2':
@@ -109,20 +109,20 @@ class AlexNet(object):
             self.__network_end(n, n.relu2, params)
             return
 
-        n.norm2 = L.LRN(n.relu2, local_size=5, alpha=1e-4, beta=0.75)
-        self.receptiveFieldStride.append(1)
-        if self.last_layer == 'norm2':
-            self.__network_end(n, n.norm2, params)
-            return
-
-        n.pool2 = L.Pooling(n.norm2, pool=P.Pooling.MAX, kernel_size=3, stride=2)
+        n.pool2 = L.Pooling(n.relu2, pool=P.Pooling.MAX, kernel_size=3, stride=2)
         self.receptiveFieldStride.append(2)
         if self.last_layer == 'pool2':
             self.__network_end(n, n.pool2, params)
             return
 
+        n.norm2 = L.LRN(n.pool2, local_size=5, alpha=1e-4, beta=0.75)
+        self.receptiveFieldStride.append(1)
+        if self.last_layer == 'norm2':
+            self.__network_end(n, n.norm2, params)
+            return
+
         # layer 3
-        n.conv3 = L.Convolution(n.pool2, kernel_size=3, num_output=384, stride=1, pad=1, group=1,
+        n.conv3 = L.Convolution(n.norm2, kernel_size=3, num_output=384, stride=1, pad=1, group=1,
                                 param=conv_param, weight_filler=wfiller, bias_filler=bfiller)
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv3':

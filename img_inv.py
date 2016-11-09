@@ -40,7 +40,7 @@ import caffe
 
 if settings.gpu:
     caffe.set_mode_gpu()
-    caffe.set_device(1)
+    caffe.set_device(0)
 # caffe.set_mode_cpu()
 
 # load models
@@ -57,16 +57,6 @@ transformer.set_raw_scale('data', 1.0)
 # ------------------------------------------------------------------------------------------------------------------
 np.random.seed([1000])
 random.seed(1000)
-
-
-# preprocess image according the networks specification
-def preprocess(net, img):
-    return transformer.preprocess('data', img)
-
-
-# deprocess image back in the standard RGB-space
-def deprocess(net, img):
-    return transformer.deprocess('data', img)
 # ------------------------------------------------------------------------------------------------------------------
 
 
@@ -156,7 +146,7 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
     energy[0] = const['C']*net.blobs['loss_l2'].data / Z
     energy[0] *= 2*net.blobs['data'].data.shape[0]  # because of the normalization constant 1/2N in the loss function
     grad_loss = np.zeros(xt.shape)
-    # grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0]
+    grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0]
     grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = const['C'] * net.blobs['data'].diff[0] / Z * 2*net.blobs['data'].data.shape[0]
     # grad_loss = np.zeros(xt.shape)
 
@@ -222,14 +212,20 @@ def inversion(net, phi_x0, octaves, debug=True):
             # use the image produced by the prev block of iterations
             tau = int(math.floor(o['jitterT']/2))
             tmp_image = np.zeros((3, h, w))
-            tmp_image[:, tau:tau+h, tau:tau+w] = preprocess(net, image)
+            tmp_image[:, tau:tau+h, tau:tau+w] = transformer.preprocess('data', image)
             image = tmp_image.copy()
             del tmp_image
 
         acc_sq_grad = np.zeros(image.shape, dtype=np.float32)
         delta = np.zeros(image.shape, dtype=np.float32)
         energy = np.zeros((o['iter_n'], 4))
+
         for i in xrange(o['iter_n']):
+
+            # Jitter
+            tau_x = random.randint(0, o['jitterT'])
+            tau_y = random.randint(0, o['jitterT'])
+            image_crop = image[:, tau_x:tau_x + h, tau_y:tau_y + w]
 
             # one gradient step
             delta, acc_sq_grad, energy[i,:] = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
@@ -246,19 +242,13 @@ def inversion(net, phi_x0, octaves, debug=True):
             W = np.min(np.stack((np.ones(image_all_colors.shape), o['B_plus']/image_all_colors)), axis=0)
             image = image*np.array([W]*image.shape[0])
 
-            # tau = int(math.floor(o['jitterT'] / 2))
-            # asimg = deprocess(net, image[:, tau:tau+h, tau:tau+w]).astype(np.float64)
-            # denoise_weight = o['start_denoise_weight'] - (o['start_denoise_weight'] - o['end_denoise_weight'] * i) / o['iter_n']
-            # denoised = denoise_tv_bregman(asimg, weight=denoise_weight, max_iter=100, eps=1e-3)
-            # image[:, tau:tau+h, tau:tau+w] = preprocess(net, denoised).astype(np.float64)
-
-            # In debug-mode save intermediate images
-            if debug:
-                dimage = deprocess(net, image)
-                # adjust image contrast if clipping is disabled
-                dimage = dimage*(255.0/np.percentile(dimage, 99.98))
-                if i % 1 == 0:  # save each iteration
-                    save_image(debug_output, "iter_%s.jpg" % str(iter).zfill(4), dimage)
+            # # In debug-mode save intermediate images
+            # if debug:
+            #     dimage = transformer.deprocess('data', image)
+            #     # adjust image contrast if clipping is disabled
+            #     dimage = dimage*(255.0/np.percentile(dimage, 99.98))
+            #     if i % 1 == 0:  # save each iteration
+            #         save_image(debug_output, "iter_%s.jpg" % str(iter).zfill(4), dimage)
 
             iter += 1   # Increase iter
 
@@ -266,20 +256,20 @@ def inversion(net, phi_x0, octaves, debug=True):
         # crop image of the initial network size (because of jitter)
         tau = int(math.floor(o['jitterT']/2))
         image = image[:, tau:tau+h, tau:tau+w]
-        image = deprocess(net, image)
+        image = transformer.deprocess('data', image)
 
-        _, ax1 = plt.subplots()
-        ax2 = ax1.twinx()
-        ax1.plot(np.arange(o['iter_n']), energy[:, 3].flatten(), 'b')
-        ax2.plot(np.arange(o['iter_n']), energy[:, 0].flatten(), 'r')
-        ax1.set_xlabel('iteration')
-        ax1.set_ylabel('sum loss')
-        ax2.set_ylabel('l2 loss')
-        plt.show()
+        # _, ax1 = plt.subplots()
+        # ax2 = ax1.twinx()
+        # ax1.plot(np.arange(o['iter_n']), energy[:, 3].flatten(), 'b')
+        # ax2.plot(np.arange(o['iter_n']), energy[:, 0].flatten(), 'r')
+        # ax1.set_xlabel('iteration')
+        # ax1.set_ylabel('sum loss')
+        # ax2.set_ylabel('l2 loss')
+        # plt.show()
 
     #
     # returning the resulting image
-    # image = deprocess(net, image)
+    # image = transformer.deprocess('data', image)
     return image
 # ------------------------------------------------------------------------------------------------------------------
 
@@ -323,8 +313,8 @@ def main():
             'reg1_C': 1/math.pow(B,6),   # normalization const 1/(B^alpha)
             'reg2_beta': 2,              # see paper for the definition of the reg term
             'reg2_C': 1/math.pow(B/6.5,2), # normalization const 1/(V^beta), V=B/6.5
-            'start_denoise_weight': 0.001,
-            'end_denoise_weight': 2
+            'start_denoise_weight': 0.0001,
+            'end_denoise_weight': 0.005
         },
         {
             'iter_n': 50,           # number of iterations with the following parameters:
@@ -366,7 +356,7 @@ def main():
         if not os.path.isdir(settings.model[m]['vis2folder']):
             os.mkdir(settings.model[m]['vis2folder'])
 
-        output_folder = settings.model[m]['vis2folder'] + 'img_inv_' + \
+        output_folder = settings.model[m]['vis2folder'] + '/img_inv_' + \
                         os.path.splitext(settings.model[m]['refimage_name'])[0] + '/'
         if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
@@ -395,7 +385,7 @@ def main():
 
             # get the reference image
             ref_image = np.float32(PIL.Image.open(refimage_path))
-            image = preprocess(net, ref_image)
+            image = transformer.preprocess('data', ref_image)
             net.blobs['data'].data[0] = image.copy()
             acts = net.forward(end=layer)
             phi_x0 = acts[layer][0]     # reference representation
@@ -412,7 +402,7 @@ def main():
 
             if not os.path.isfile(params['path2net']):
                 # caffenet
-                if settings.model[m]['name'] == 'caffenet':
+                if settings.model[m]['name'] == 'alexnet':
                     AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
                 # cliqueCNN
                 if settings.model[m]['name'] == 'cliqueCNN_long_jump':
