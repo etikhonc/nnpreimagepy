@@ -18,7 +18,7 @@ November 2016
 import os
 os.environ['GLOG_minloglevel'] = '2'  # suprress Caffe verbose prints
 
-from google.protobuf import text_format
+import matplotlib.pyplot as plt
 
 import settings
 import site
@@ -28,7 +28,7 @@ import math
 import numpy as np
 import PIL.Image
 import random
-import scipy.io as scipyio
+from skimage.restoration import denoise_tv_bregman
 import scipy.stats
 import shutil
 import sys
@@ -56,6 +56,8 @@ transformer.set_channel_swap('data', (2, 1, 0))  # the reference model has chann
 transformer.set_raw_scale('data', 1.0)
 # ------------------------------------------------------------------------------------------------------------------
 
+np.random.seed([1000])
+random.seed(1000)
 
 # preprocess image according the networks specification
 def preprocess(net, img):
@@ -148,15 +150,13 @@ def grad_step(net, Z, xt, delta_xt, acc_sq_grad, const):
     # l2-loss
     src.data[0] = xt_crop.copy()
     fw = net.forward()   # propagate the current image to the loss
-    # bw = net.backward(diffs=['data', 'loss_l2'])  # back propagate the gradient
     bw = net.backward(start='loss_l2')  # back propagate the gradient
 
-    energy[0] = net.blobs['loss_l2'].data
+    energy[0] = const['C']*net.blobs['loss_l2'].data / Z
     energy[0] *= 2*net.blobs['data'].data.shape[0]  # because of the normalization constant 1/2N in the loss function
     grad_loss = np.zeros(xt.shape)
-
-    # grad_loss[:, tau_x:tau_x+h, tau_y:tau_y+w] = bw['data'] / Z * 2*net.blobs['data'].data.shape[0]
-    grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0] / Z * 2*net.blobs['data'].data.shape[0]
+    # grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = net.blobs['data'].diff[0]
+    grad_loss[:, tau_x:tau_x + h, tau_y:tau_y + w] = const['C'] * net.blobs['data'].diff[0] / Z * 2*net.blobs['data'].data.shape[0]
     # grad_loss = np.zeros(xt.shape)
 
     # reg1: bounded range
@@ -227,15 +227,15 @@ def inversion(net, phi_x0, octaves, debug=True):
 
         acc_sq_grad = np.zeros(image.shape, dtype=np.float32)
         delta = np.zeros(image.shape, dtype=np.float32)
-
+        energy = np.zeros((o['iter_n'], 4))
         for i in xrange(o['iter_n']):
 
             # one gradient step
-            delta, acc_sq_grad, energy = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
+            delta, acc_sq_grad, energy[i,:] = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
 
             # print current info
             print "iter: %05s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
-                  % (iter, energy[0], energy[1], energy[2], energy[3])
+                  % (iter, energy[i,0], energy[i,1], energy[i,2], energy[i,3])
 
             # save current images
             image = image + delta
@@ -244,6 +244,12 @@ def inversion(net, phi_x0, octaves, debug=True):
             image_all_colors = np.sqrt(np.sum(image*image, axis=0))
             W = np.min(np.stack((np.ones(image_all_colors.shape), o['B_plus']/image_all_colors)), axis=0)
             image = image*np.array([W]*image.shape[0])
+
+            # tau = int(math.floor(o['jitterT'] / 2))
+            # asimg = deprocess(net, image[:, tau:tau+h, tau:tau+w]).astype(np.float64)
+            # denoise_weight = o['start_denoise_weight'] - (o['start_denoise_weight'] - o['end_denoise_weight'] * i) / o['iter_n']
+            # denoised = denoise_tv_bregman(asimg, weight=denoise_weight, max_iter=100, eps=1e-3)
+            # image[:, tau:tau+h, tau:tau+w] = preprocess(net, denoised).astype(np.float64)
 
             # In debug-mode save intermediate images
             if debug:
@@ -260,6 +266,16 @@ def inversion(net, phi_x0, octaves, debug=True):
         tau = int(math.floor(o['jitterT']/2))
         image = image[:, tau:tau+h, tau:tau+w]
         image = deprocess(net, image)
+
+        _, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax1.plot(np.arange(o['iter_n']), energy[:, 3].flatten(), 'b')
+        ax2.plot(np.arange(o['iter_n']), energy[:, 0].flatten(), 'r')
+        ax1.set_xlabel('iteration')
+        ax1.set_ylabel('sum loss')
+        ax2.set_ylabel('l2 loss')
+        plt.show()
+
     #
     # returning the resulting image
     # image = deprocess(net, image)
@@ -292,30 +308,35 @@ def save_image(output_folder, filename, img):
 
 def main():
     # Hyperparams for AlexNet
+    B = 80
     octaves = [
         {
             'iter_n': 300,          # number of iterations with the following parameters:
             'lr_0': 53.3333,        # init learning rate: 0.05*B^2/alpha
             'rho': 0.9,             # momentum
-            'B': 80,                # normalization constant
-            'B_plus': 2*80,         # pixel feasible region [-B_plus, B_plus]
+            'C': 1,                 # weights of the l2 term in the objective
+            'B': B,                # normalization constant
+            'B_plus': 2*B,         # pixel feasible region [-B_plus, B_plus]
             'jitterT': 1,           # maximal hor/ver translation !!! depends on the layer strides
-            'reg1_alpha': 6,        # see paper for the definition of the reg term
-            'reg1_C': 3.8147e-12,   # normalization const 1/(B^alpha)
-            'reg2_beta': 2,         # see paper for the definition of the reg term
-            'reg2_C': 0.0066        # normalization const 1/(V^beta), V=B/6.5
+            'reg1_alpha': 6,            # see paper for the definition of the reg term
+            'reg1_C': 1/math.pow(B,6),   # normalization const 1/(B^alpha)
+            'reg2_beta': 2,              # see paper for the definition of the reg term
+            'reg2_C': 1/math.pow(B/6.5,2), # normalization const 1/(V^beta), V=B/6.5
+            'start_denoise_weight': 0.001,
+            'end_denoise_weight': 2
         },
         {
             'iter_n': 50,           # number of iterations with the following parameters:
             'lr_0': 5.33333,        # init learning rate: 0.05*B^2/alpha
             'rho': 0.9,             # momentum
-            'B': 80,                # normalization constant
-            'B_plus': 2 * 80,       # pixel feasible region [-B_plus, B_plus]
-            'jitterT': 0,           # maximal hor/ver translation
-            'reg1_alpha': 6,        # see paper for the definition of the reg term
-            'reg1_C': 3.8147e-12,   # normalization const 1/(B^alpha)
-            'reg2_beta': 2,         # see paper for the definition of the reg term
-            'reg2_C': 0.0066        # normalization const 1/(V^beta), V=B/6.5
+            'C': 1,  # weights of the l2 term in the objective
+            'B': B,                # normalization constant
+            'B_plus': 2*B,         # pixel feasible region [-B_plus, B_plus]
+            'jitterT': 0,           # maximal hor/ver translation !!! depends on the layer strides
+            'reg1_alpha': 6,            # see paper for the definition of the reg term
+            'reg1_C': 1/math.pow(B,6),   # normalization const 1/(B^alpha)
+            'reg2_beta': 2,              # see paper for the definition of the reg term
+            'reg2_C': 1/math.pow(B/6.5,2), # normalization const 1/(V^beta), V=B/6.5
         }
     ]
 
@@ -405,6 +426,7 @@ def main():
             # !!!!! Adaptive jitter range
             receptiveFieldStride = np.load(str.split(params['path2net'], '.')[0] +'_stride.npy')
             octaves[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1]/4))]) - 1
+            # octaves[0]['jitterT'] = 0
 
             assert new_net.blobs['data'].data.shape[2] == original_h
             assert new_net.blobs['data'].data.shape[3] == original_w
