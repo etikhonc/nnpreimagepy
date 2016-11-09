@@ -55,13 +55,14 @@ transformer.set_transpose('data', (2, 0, 1))
 transformer.set_channel_swap('data', (2, 1, 0))  # the reference model has channels in BGR order instead of RGB
 transformer.set_raw_scale('data', 1.0)
 # ------------------------------------------------------------------------------------------------------------------
-
 np.random.seed([1000])
 random.seed(1000)
+
 
 # preprocess image according the networks specification
 def preprocess(net, img):
     return transformer.preprocess('data', img)
+
 
 # deprocess image back in the standard RGB-space
 def deprocess(net, img):
