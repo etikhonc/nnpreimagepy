@@ -10,7 +10,7 @@ from caffe.proto import caffe_pb2  # for solver definition
 
 
 # -----------------------------------------------------------------------------
-class PoseNet(object):
+class VideoNet(object):
     """ Constructor """
 
     def __init__(self, data_shape, label_shape, last_layer='fc8', params=[]):

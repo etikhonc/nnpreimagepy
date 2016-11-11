@@ -16,7 +16,7 @@ November 2016
 '''
 
 import os
-# os.environ['GLOG_minloglevel'] = '2'  # suprress Caffe verbose prints
+os.environ['GLOG_minloglevel'] = '2'  # suprress Caffe verbose prints
 
 import matplotlib.pyplot as plt
 
@@ -28,8 +28,6 @@ import math
 import numpy as np
 import PIL.Image
 import random
-from skimage.restoration import denoise_tv_bregman
-from skimage.restoration import denoise_bilateral
 
 import scipy.stats
 import shutil
@@ -48,8 +46,9 @@ if settings.gpu:
 # load models
 from alexnet import AlexNet
 from cliquecnn import CliqueCNN
-# from posenet import PoseNet
-from videonet import PoseNet
+from posenet import PoseNet
+from videonet import VideoNet
+from cnn_lstm_net import CNN_LSTN_Net
 
 
 # define input transformer
@@ -80,7 +79,6 @@ def reg_intensity(x, gamma):  # x: CxHxW
 
 # reg2 function and its' gradient: bounded variation
 def reg_tv(x, gamma):  # x: CxHxW
-
     HW = np.prod(x.shape[1:3])
 
     d1 = x[:, :, 1:] - x[:, :, 0:-1]
@@ -108,6 +106,45 @@ def reg_tv(x, gamma):  # x: CxHxW
     d22[:, 0, :] = -d2[:, 0, :]
 
     dx = (gamma/float(HW)) * (d11 + d22)
+
+    return val, dx
+
+
+# reg2 function and its' gradient: bounded variation
+def reg_tv_(x, gamma):  # x: CxHxW
+
+    x = 0.299 * x[2, :, :] + 0.587 * x[0, :, :] + 0.114 * x[1, :, :]
+
+    HW = x.size
+
+    d1 = x[:, 1:] - x[:, 0:-1]
+    d1 = np.pad(d1, ((0, 0), (0, 1)), mode='constant', constant_values=0)  # add zeros column at the end
+
+    d2 = x[1:, :] - x[0:-1, :]
+    d2 = np.pad(d2, ((0, 1), (0, 0)), mode='constant', constant_values=0)  # add zeros row at the bottom
+
+    v = np.power(d1 * d1 + d2 * d2, gamma / 2.0)
+
+    # value of the function
+    val = sum(v.flatten()) / float(HW)
+
+    # gradient
+    v_ = np.power(np.clip(v, 1e-6, np.inf), 1 - 2 / gamma)
+    d1_ = v_ * d1
+    d2_ = v_ * d2
+    d11 = d1_[:, 0:-1] - d1_[:, 1:]
+    d22 = d2_[0:-1, :] - d2_[1:, :]
+
+    d11 = np.pad(d11, ((0, 0), (1, 0)), mode='constant', constant_values=0)
+    d11[:, 0] = -d1[:, 0]
+
+    d22 = np.pad(d22, ((1, 0), (0, 0)), mode='constant', constant_values=0)
+    d22[0, :] = -d2[0, :]
+
+    dx = (gamma / float(HW)) * (d11 + d22)
+
+    dx = np.dstack([dx,dx,dx])
+    dx = dx.transpose((2,0,1))
 
     return val, dx
 # ------------------------------------------------------------------------------------------------------------------
@@ -229,8 +266,9 @@ def inversion(net, phi_x0, octaves, debug=True):
             delta, acc_sq_grad, energy[i,:] = grad_step(net, Z, image, delta, acc_sq_grad, const=o)
 
             # print current info
-            print "iter: %05s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
-                  % (iter, energy[i,0], energy[i,1], energy[i,2], energy[i,3])
+            if debug:
+                print "iter: %05s\t l2-loss: %.5f\t reg1: %.5f\t reg2: %.5f\t total_energy: %.5f" \
+                        % (iter, energy[i,0], energy[i,1], energy[i,2], energy[i,3])
 
             # save current images
             image = image + delta
@@ -304,10 +342,171 @@ def save_image(output_folder, filename, img):
 # ------------------------------------------------------------------------------------------------------------------
 
 
+def optimization_run(optparams, debug=True):
+    # create a plot for all results:
+    nrow = settings.nModels
+    ncol = 9
+    # figure
+    f1, axs = plt.subplots(nrows=nrow, ncols=ncol)
+    # distance between subplots
+    f1.subplots_adjust(wspace=0, hspace=0.1)
+    # rownames names
+    for i in xrange(nrow):
+        for j in xrange(ncol):
+            # axs[i, j].set_xticklabels([])
+            # axs[i, j].set_yticklabels([])
+            plt.sca(axs[i, j])
+            plt.axis('off')
+
+    # columns names
+    cols = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'pool5', 'fc6', 'fc7', 'fc8']
+    for ax, col in zip(axs[0], cols):
+        ax.set_title(col)
+
+    # iterate over all models
+    for m in range(settings.nModels):
+
+        if settings.model[m] is None:
+            continue
+
+        # =============== MODEL m ====================================
+
+        # models means
+        mean = np.load(settings.model[m]['mean'])
+        mean = mean.squeeze()
+        transformer.set_mean('data', mean.mean(1).mean(1))
+
+        # Load reference network which one want to investigate
+        net = caffe.Classifier(settings.model[m]['prototxt'], settings.model[m]['weights'], caffe.TEST)
+
+        print net.blobs.keys()
+        if 'X' in net.blobs.keys():
+            net.blobs['data'] = net.blobs['X']
+            net.blobs.pop('X')
+
+        # get original input size of network
+        original_w = net.blobs['data'].width
+        original_h = net.blobs['data'].height
+
+        # setup the output path
+        if not os.path.isdir(settings.model[m]['vis2folder']):
+            os.mkdir(settings.model[m]['vis2folder'])
+
+        output_folder = settings.model[m]['vis2folder'] + '/img_inv_' + \
+                        os.path.splitext(settings.refimage_name)[0] + '/'
+        if not os.path.isdir(output_folder):
+            os.mkdir(output_folder)
+
+        # which class to visualize
+        layers = settings.model[m]['layers'].keys()
+        layer_count = 0
+        for layer in layers:
+
+            filename = 'layer_' + layer
+            refimage_path = settings.refimage_path + settings.refimage_name
+
+            print "----------"
+            print "layer: %s\tref_image: %s\tfilename: %s" % (layer, refimage_path, filename)
+            print "----------"
+
+            # if a specific output folder is provided
+            if len(sys.argv) == 4:
+                output_folder = str(sys.argv[3])
+
+            print "Output dir: %s" % output_folder
+            print "-----------"
+
+            # if os.path.isfile("%s/%s.jpg" % (output_folder, filename)):
+            #     print 'Inversion is already computed. Skipping the layer...'
+            #     continue
+
+            # get the reference image
+            ref_image = np.float32(PIL.Image.open(refimage_path))
+            image = transformer.preprocess('data', ref_image)
+            net.blobs['data'].data[0] = image.copy()
+            acts = net.forward(end=layer)
+            phi_x0 = acts[layer][0]  # reference representation
+
+            print 'shape of the reference layer: ', phi_x0.shape
+
+            if not os.path.isdir('./models/' + settings.model[m]['name']):
+                os.mkdir('./models/' + settings.model[m]['name'])
+
+            # initialize a new network
+            params = {'path2net': os.getcwd() + '/models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
+                      'path2solver': os.getcwd() + '/models/' + settings.model[m][
+                          'name'] + '/solver_' + layer + '.prototxt',
+                      'useGPU': settings.gpu, 'DEVICE_ID': 0}
+
+            # if not os.path.isfile(params['path2net']):
+            # caffenet
+            if settings.model[m]['name'] == 'alexnet':
+                AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+            # cliqueCNN
+            if settings.model[m]['name'] == 'cliqueCNN_long_jump':
+                CliqueCNN(net.blobs['data'].data.shape, net.blobs[layer].data.shape,
+                          num_classes=settings.model[m]['nLabels'], last_layer=layer, params=params)
+            # posenet
+            if settings.model[m]['name'] == 'posenet':
+                PoseNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+
+            # videonet
+            if settings.model[m]['name'] == 'videonet':
+                VideoNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+
+            # CNN_LSTM-Net
+            if settings.model[m]['name'] == 'cnn_lstm':
+                CNN_LSTN_Net(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
+
+            new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
+
+            # !!!!! Adaptive jitter range
+            receptiveFieldStride = np.load(str.split(params['path2net'], '.')[0] + '_stride.npy')
+            optparams[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1] / 4))]) - 1
+
+            # !!!! Adaptive weight factor
+            optparams[0]['C'] = settings.model[m]['layers'][layer]
+            optparams[1]['C'] = settings.model[m]['layers'][layer]
+            # octaves[2]['C'] = settings.model[m]['layers'][layer]
+
+            assert new_net.blobs['data'].data.shape[2] == original_h
+            assert new_net.blobs['data'].data.shape[3] == original_w
+
+            # generate class visualization via octavewise gradient ascent
+            output_image = inversion(new_net, phi_x0, optparams, debug=debug)
+            # normalize image = vl_imsc
+            output_image = output_image - output_image.min()
+            output_image = output_image / output_image.max()
+            output_image = 255 * np.clip(output_image, 0, 1)
+
+            # save result image
+            path = save_image(output_folder, filename, output_image)
+            print "Saved to %s" % path
+
+            # add result image to the common plot
+            axs[m, 0].set_ylabel(settings.model[m]['name'], rotation=0, size='large')
+            plt.sca(axs[m, layer_count])
+            plt.imshow(np.uint8(output_image))
+            # plt.title('%s: %s' % (settings.model[m]['name'], layer), fontsize=10)
+            plt.axis('off')
+
+            layer_count += 1
+        print '----------------------------------------------------------------------------------------------------'
+
+        for i in range(ncol - layer_count):
+            plt.sca(axs[m, i])
+            plt.axis('off')
+
+    if not os.path.isdir('./results/'):
+        os.mkdir('./results/')
+
+    f1.savefig('results/results_all_' + settings.refimage_name.split('.')[0] + '.png', dpi=600)
+# ------------------------------------------------------------------------------------------------------------------
+
+
 def main():
-    # Hyperparams for AlexNet
     B = 50
-    octaves = [
+    optparams = [
         {
             'iter_n': 250,          # number of iterations with the following parameters:
             'lr_0': 53.3333,        # init learning rate: 0.05*B^2/alpha
@@ -349,116 +548,26 @@ def main():
         }
     ]
 
-    for m in range(settings.nModels):
+    # parse input parameters (if eny provided)
+    if not str(sys.argv[1]) == '':
+        path2_ref_images = str(sys.argv[1])  # path to the folder with the reference images
 
-        if settings.model[m] is None:
-            continue
-
-        # =============== MODEL m ====================================
-
-        # models means
-        mean = np.load(settings.model[m]['mean'])
-        mean = mean.squeeze()
-        transformer.set_mean('data', mean.mean(1).mean(1))
-
-        # Load reference network which one want to investigate
-        net = caffe.Classifier(settings.model[m]['prototxt'], settings.model[m]['weights'], caffe.TEST)
-
-        # print net.blobs.keys()
-        # net.blobs['data'] = net.blobs['X']
-        # net.blobs.pop('X')
-
-        # get original input size of network
-        original_w = net.blobs['data'].width
-        original_h = net.blobs['data'].height
-
-        # setup the output path
-        if not os.path.isdir(settings.model[m]['vis2folder']):
-            os.mkdir(settings.model[m]['vis2folder'])
-
-        output_folder = settings.model[m]['vis2folder'] + '/img_inv_' + \
-                        os.path.splitext(settings.model[m]['refimage_name'])[0] + '/'
-        if not os.path.isdir(output_folder):
-            os.mkdir(output_folder)
-
-        # which class to visualize
-        layers = settings.model[m]['layers'].keys()
-        for layer in layers:
-
-            filename = 'layer_' + layer
-            refimage_path = settings.model[m]['refimage_path'] + settings.model[m]['refimage_name']
-
-            print "----------"
-            print "layer: %s\tref_image: %s\tfilename: %s" % (layer, refimage_path, filename)
-            print "----------"
-
-            # if a specific output folder is provided
-            if len(sys.argv) == 4:
-                output_folder = str(sys.argv[3])
-
-            print "Output dir: %s" % output_folder
-            print "-----------"
-
-            if os.path.isfile("%s/%s.jpg" % (output_folder, filename)):
-                print 'Inversion is already computed. Skipping the layer...'
-                continue
-
-            # get the reference image
-            ref_image = np.float32(PIL.Image.open(refimage_path))
-            image = transformer.preprocess('data', ref_image)
-            net.blobs['data'].data[0] = image.copy()
-            acts = net.forward(end=layer)
-            phi_x0 = acts[layer][0]     # reference representation
-
-            print 'shape of the reference layer: ', phi_x0.shape
-
-            if not os.path.isdir('./models/' + settings.model[m]['name']):
-                os.mkdir('./models/' + settings.model[m]['name'])
-
-            # initialize a new network
-            params = {'path2net': os.getcwd() + '/models/' + settings.model[m]['name'] + '/test_' + layer + '.prototxt',
-                      'path2solver': os.getcwd() + '/models/' + settings.model[m]['name'] + '/solver_' + layer + '.prototxt',
-                      'useGPU': settings.gpu, 'DEVICE_ID': 0}
-
-            # if not os.path.isfile(params['path2net']):
-            # caffenet
-            if settings.model[m]['name'] == 'alexnet':
-                AlexNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
-            # cliqueCNN
-            if settings.model[m]['name'] == 'cliqueCNN_long_jump':
-                CliqueCNN(net.blobs['data'].data.shape, net.blobs[layer].data.shape,
-                          num_classes=settings.model[m]['nLabels'], last_layer=layer, params=params)
-            # posenet
-            if settings.model[m]['name'] == 'posenet_oet':
-                PoseNet(net.blobs['data'].data.shape, net.blobs[layer].data.shape, last_layer=layer, params=params)
-
-            new_net = caffe.Net(params['path2net'], settings.model[m]['weights'], caffe.TEST)
-
-            # !!!!! Adaptive jitter range
-            receptiveFieldStride = np.load(str.split(params['path2net'], '.')[0] +'_stride.npy')
-            octaves[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1]/4))]) - 1
-
-            # !!!! Adaptive weight factor
-            octaves[0]['C'] = settings.model[m]['layers'][layer]
-            octaves[1]['C'] = settings.model[m]['layers'][layer]
-            # octaves[2]['C'] = settings.model[m]['layers'][layer]
-
-
-            assert new_net.blobs['data'].data.shape[2] == original_h
-            assert new_net.blobs['data'].data.shape[3] == original_w
-
-            # generate class visualization via octavewise gradient ascent
-            output_image = inversion(new_net, phi_x0, octaves, debug=False)
-            # normalize image = vl_imsc
-            output_image = output_image - output_image.min()
-            output_image = output_image/output_image.max()
-            output_image = 255*np.clip(output_image, 0, 1)
-
-            # save result image
-            path = save_image(output_folder, filename, output_image)
-            print "Saved to %s" % path
-
-        print '----------------------------------------------------------------------------------------------------'
+        imagefiles = [f for f in os.listdir(path2_ref_images) \
+                      if (os.path.isfile(f) and (f.endswith(".png") or f.endswith(".jpg")))]
+        count = 0
+        ntotal = len(imagefiles)
+        for file in imagefiles:
+            if os.path.isfile(file) and (file.endswith(".png") or file.endswith(".jpg")):
+                print "*********************************************************************"
+                print "Process image {%d,%d}: %s" % (count+1, ntotal, file)
+                print "*********************************************************************"
+                settings.refimage_path = path2_ref_images
+                settings.refimage_name = file
+                optimization_run(optparams)
+                count += 1
+    else:
+        # start optimization
+        optimization_run(optparams, debug=False)
 
 # ------------------------------------------------------------------------------------------------------------------
 
