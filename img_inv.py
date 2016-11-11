@@ -398,9 +398,10 @@ def optimization_run(optparams, debug=True):
             os.mkdir(output_folder)
 
         # which class to visualize
-        layers = settings.model[m]['layers'].keys()
-        layer_count = 0
-        for layer in layers:
+        nLayers = len(settings.model[m]['labels'])
+        for l in xrange(nLayers):
+
+        	layer = settings.model[m]['labels'][l].name
 
             filename = 'layer_' + layer
             refimage_path = settings.refimage_path + settings.refimage_name
@@ -465,9 +466,8 @@ def optimization_run(optparams, debug=True):
             optparams[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1] / 4))]) - 1
 
             # !!!! Adaptive weight factor
-            optparams[0]['C'] = settings.model[m]['layers'][layer]
-            optparams[1]['C'] = settings.model[m]['layers'][layer]
-            # octaves[2]['C'] = settings.model[m]['layers'][layer]
+            optparams[0]['C'] = settings.model[m]['layers'][l].C  % 
+            optparams[1]['C'] = settings.model[m]['layers'][l].C  % 
 
             assert new_net.blobs['data'].data.shape[2] == original_h
             assert new_net.blobs['data'].data.shape[3] == original_w
@@ -485,7 +485,7 @@ def optimization_run(optparams, debug=True):
 
             # add result image to the common plot
             axs[m, 0].set_ylabel(settings.model[m]['name'], rotation=0, size='large')
-            plt.sca(axs[m, layer_count])
+            plt.sca(axs[m, l])
             plt.imshow(np.uint8(output_image))
             # plt.title('%s: %s' % (settings.model[m]['name'], layer), fontsize=10)
             plt.axis('off')
@@ -493,7 +493,7 @@ def optimization_run(optparams, debug=True):
             layer_count += 1
         print '----------------------------------------------------------------------------------------------------'
 
-        for i in range(ncol - layer_count):
+        for i in range(ncol - nLayers):
             plt.sca(axs[m, i])
             plt.axis('off')
 
@@ -520,19 +520,6 @@ def main():
             'reg2_beta': 2,              # see paper for the definition of the reg term
             'reg2_C': 1/math.pow(B/6.5,2) # normalization const 1/(V^beta), V=B/6.5
         },
-        # {
-        #     'iter_n': 100,           # number of iterations with the following parameters:
-        #     'lr_0': 53.333333/5.,        # init learning rate: 0.05*B^2/alpha
-        #     'rho': 0.9,             # momentum
-        #     'C': 1,  # weights of the l2 term in the objective
-        #     'B': B,                # normalization constant
-        #     'B_plus': 2*B,         # pixel feasible region [-B_plus, B_plus]
-        #     'jitterT': 0,           # maximal hor/ver translation !!! depends on the layer strides
-        #     'reg1_alpha': 6,            # see paper for the definition of the reg term
-        #     'reg1_C': 1/math.pow(B,6),   # normalization const 1/(B^alpha)
-        #     'reg2_beta': 2,              # see paper for the definition of the reg term
-        #     'reg2_C': 1/math.pow(B/6.5,2), # normalization const 1/(V^beta), V=B/6.5
-        # },
         {
             'iter_n': 50,  # number of iterations with the following parameters:
             'lr_0': 5.333333,  # init learning rate: 0.05*B^2/alpha
