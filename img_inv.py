@@ -400,9 +400,7 @@ def optimization_run(optparams, debug=True):
         # which class to visualize
         nLayers = len(settings.model[m]['labels'])
         for l in xrange(nLayers):
-
-        	layer = settings.model[m]['labels'][l].name
-
+            layer = settings.model[m]['labels'][l].name
             filename = 'layer_' + layer
             refimage_path = settings.refimage_path + settings.refimage_name
 
@@ -466,8 +464,8 @@ def optimization_run(optparams, debug=True):
             optparams[0]['jitterT'] = np.max([1, int(round(receptiveFieldStride[-1] / 4))]) - 1
 
             # !!!! Adaptive weight factor
-            optparams[0]['C'] = settings.model[m]['layers'][l].C  % 
-            optparams[1]['C'] = settings.model[m]['layers'][l].C  % 
+            optparams[0]['C'] = settings.model[m]['layers'][l].C
+            optparams[1]['C'] = settings.model[m]['layers'][l].C
 
             assert new_net.blobs['data'].data.shape[2] == original_h
             assert new_net.blobs['data'].data.shape[3] == original_w
@@ -489,8 +487,6 @@ def optimization_run(optparams, debug=True):
             plt.imshow(np.uint8(output_image))
             # plt.title('%s: %s' % (settings.model[m]['name'], layer), fontsize=10)
             plt.axis('off')
-
-            layer_count += 1
         print '----------------------------------------------------------------------------------------------------'
 
         for i in range(ncol - nLayers):
