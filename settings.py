@@ -8,7 +8,7 @@ gpu = True
 
 nModels = 6
 model = np.array([None]*nModels)
-layer = namedtuple("ĺayer", ["name", "C"])
+layer = namedtuple("layer", ["name", "C"])
 
 # refimage_path = '/export/home/etikhonc/workspace/data/OlympicSports/nneighbors/cliqueCNN/alpha_blending/'
 refimage_path = './'
@@ -62,7 +62,7 @@ model[3]['weights'] = './models/videoPosenet/PoseNet_307_iter40K.caffemodel'
 model[3]['prototxt'] = './models/videoPosenet/posenet_deploy.prototxt'
 model[3]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
 model[3]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20), \
-					  layer('pool5', 10)}
+					  layer('pool5', 10)]
 # model[3]['refimage_path'] = refimage_path
 # model[3]['refimage_name'] = refimage_name
 model[3]['vis2folder'] = './results_' + model[3]['name'] + '/'
@@ -86,7 +86,7 @@ model[5]['name'] = 'cnn_lstm'
 model[5]['weights'] = './models/CNN_LSTM/PredictSorting_iter_20000.caffemodel'
 model[5]['prototxt'] = './models/CNN_LSTM/deploy_LSTMAndCNN.prototxt'
 model[5]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
-model[5]['layers'] = [ layer('conv1', 300], layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20), \
+model[5]['layers'] = [ layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20), \
 					   layer('pool5', 10), layer('fc6', 2), layer('fc7', 2)]
 # model[5]['refimage_path'] = refimage_path
 # model[5]['refimage_name'] = refimage_name
