@@ -18,6 +18,8 @@ November 2016
 import os
 os.environ['GLOG_minloglevel'] = '2'  # suprress Caffe verbose prints
 
+import matplotlib
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
 import settings
@@ -347,6 +349,7 @@ def optimization_run(optparams, debug=True):
     nrow = settings.nModels
     ncol = 9
     # figure
+    plt.ioff()
     f1, axs = plt.subplots(nrows=nrow, ncols=ncol)
     # distance between subplots
     f1.subplots_adjust(wspace=0, hspace=0.1)
@@ -362,6 +365,8 @@ def optimization_run(optparams, debug=True):
     cols = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'pool5', 'fc6', 'fc7', 'fc8']
     for ax, col in zip(axs[0], cols):
         ax.set_title(col)
+    # for m in range(settings.nModels):
+	# axs[m,0].set_ylabel(settings.model[m]['name'], rotation=0)
 
     # iterate over all models
     for m in range(settings.nModels):
@@ -398,9 +403,9 @@ def optimization_run(optparams, debug=True):
             os.mkdir(output_folder)
 
         # which class to visualize
-        nLayers = len(settings.model[m]['labels'])
+        nLayers = len(settings.model[m]['layers'])
         for l in xrange(nLayers):
-            layer = settings.model[m]['labels'][l].name
+            layer = settings.model[m]['layers'][l].name
             filename = 'layer_' + layer
             refimage_path = settings.refimage_path + settings.refimage_name
 
@@ -482,16 +487,14 @@ def optimization_run(optparams, debug=True):
             print "Saved to %s" % path
 
             # add result image to the common plot
-            axs[m, 0].set_ylabel(settings.model[m]['name'], rotation=0, size='large')
             plt.sca(axs[m, l])
             plt.imshow(np.uint8(output_image))
-            # plt.title('%s: %s' % (settings.model[m]['name'], layer), fontsize=10)
-            plt.axis('off')
+            # plt.axis('off')
         print '----------------------------------------------------------------------------------------------------'
 
-        for i in range(ncol - nLayers):
-            plt.sca(axs[m, i])
-            plt.axis('off')
+        # for i in range(ncol - nLayers):
+        #    plt.sca(axs[m, nLayers+i])
+        #     plt.axis('off')
 
     if not os.path.isdir('./results/'):
         os.mkdir('./results/')
