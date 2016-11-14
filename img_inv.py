@@ -537,13 +537,12 @@ def main():
     # parse input parameters (if eny provided)
     if not str(sys.argv[1]) == '':
         path2_ref_images = str(sys.argv[1])  # path to the folder with the reference images
-
         imagefiles = [f for f in os.listdir(path2_ref_images) \
-                      if (os.path.isfile(f) and (f.endswith(".png") or f.endswith(".jpg")))]
+                      if (os.path.isfile(path2_ref_images + '/' + f) and (f.endswith(".png") or f.endswith(".jpg")))]
         count = 0
         ntotal = len(imagefiles)
         for file in imagefiles:
-            if os.path.isfile(file) and (file.endswith(".png") or file.endswith(".jpg")):
+            if os.path.isfile(path2_ref_images + '/' + file) and (file.endswith(".png") or file.endswith(".jpg")):
                 print "*********************************************************************"
                 print "Process image {%d,%d}: %s" % (count+1, ntotal, file)
                 print "*********************************************************************"
