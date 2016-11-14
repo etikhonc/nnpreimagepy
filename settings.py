@@ -58,8 +58,8 @@ model[2]['vis2folder'] = './results_' + model[2]['name'] + '/'
 # Model 4: Posenet
 model[3] = dict()
 model[3]['name'] = 'posenet'
-model[3]['weights'] = './models/videoPosenet/PoseNet_307_iter40K.caffemodel'
-model[3]['prototxt'] = './models/videoPosenet/posenet_deploy.prototxt'
+model[3]['weights'] = '/export/home/etikhonc/workspace/data/NNModels/videoPosenet/PoseNet_307_iter40K.caffemodel'
+model[3]['prototxt'] = '/export/home/etikhonc/workspace/data/NNModels/videoPosenet/posenet_deploy.prototxt'
 model[3]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
 model[3]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20),
                       layer('pool5', 10)]
@@ -70,8 +70,8 @@ model[3]['vis2folder'] = './results_' + model[3]['name'] + '/'
 # Model 5: videoNet
 model[4] = dict()
 model[4]['name'] = 'videonet'
-model[4]['weights'] = './models/videoNet_GD/videoNet_GD_v152_702_iter_40000.caffemodel'
-model[4]['prototxt'] = './models/videoNet_GD/videoNet_GD_deploy.prototxt'
+model[4]['weights'] = '/export/home/etikhonc/workspace/data/NNModels/videoNet_GD/videoNet_GD_v152_702_iter_40000.caffemodel'
+model[4]['prototxt'] = '/export/home/etikhonc/workspace/data/NNModels/videoNet_GD/videoNet_GD_deploy.prototxt'
 model[4]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
 model[4]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20),
                       layer('pool5', 10)]
@@ -83,8 +83,8 @@ model[4]['vis2folder'] = './results_' + model[4]['name'] + '/'
 # Model 6: CNN-LSTM
 model[5] = dict()
 model[5]['name'] = 'cnn_lstm'
-model[5]['weights'] = './models/CNN_LSTM/PredictSorting_iter_20000.caffemodel'
-model[5]['prototxt'] = './models/CNN_LSTM/deploy_LSTMAndCNN.prototxt'
+model[5]['weights'] = '/export/home/etikhonc/workspace/data/NNModels/CNN_LSTM/PredictSorting_iter_20000.caffemodel'
+model[5]['prototxt'] = '/export/home/etikhonc/workspace/data/NNModels/CNN_LSTM/deploy_LSTMAndCNN.prototxt'
 model[5]['mean'] = '/export/home/etikhonc/caffe-master/data/ilsvrc12/ilsvrc12.npy'
 model[5]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20),
                       layer('pool5', 10), layer('fc6', 2), layer('fc7', 2)]
