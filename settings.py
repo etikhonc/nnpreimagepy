@@ -31,15 +31,19 @@ model[0]['vis2folder'] = './results_' + model[0]['name'] + '/'
 # Model 2: cliqueCNN
 model[1] = dict()
 model[1]['name'] = 'cliqueCNN_long_jump'
-model[1]['weights'] = '/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/models/cliqueCNN_OS_long_jump/snap_iter_30000.caffemodel'
-model[1]['prototxt'] = '/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/models/cliqueCNN_OS_long_jump/deploy.prototxt'
+# model[1]['weights'] = '/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/models/cliqueCNN_OS_long_jump/snap_iter_30000.caffemodel'
+# model[1]['prototxt'] = '/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/models/cliqueCNN_OS_long_jump/deploy.prototxt'
+model[1]['weights'] = '/export/home/mbautist/Desktop/workspace/cnn_similarities/NIPS2016/snapshots/long_jump/snap_iter_30000.caffemodel'
+model[1]['prototxt'] = '/export/home/etikhonc/workspace/data/NNModels/cliqueCNN_OS_long_jump/deploy_2.prototxt'
 model[1]['mean'] = '/export/home/etikhonc/workspace/nn_visualizations/deep-visualization-toolbox/models/cliqueCNN_OS_long_jump/mean_CHW.npy'
+# model[1]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20),
+#                       layer('pool5', 10), layer('fc6_', 2), layer('fc7_', 2), layer('fc8_output', 2)]
 model[1]['layers'] = [layer('conv1', 300), layer('conv2', 300), layer('conv3', 300), layer('conv4', 100), layer('conv5', 20),
-                      layer('pool5', 10), layer('fc6_', 2), layer('fc7_', 2), layer('fc8_output', 2)]
+                      layer('pool5', 10), layer('fc6', 2), layer('fc7_', 2), layer('fc8_output', 2)]
 # model[1]['refimage_path'] = refimage_path
 # model[1]['refimage_name'] = refimage_name
 model[1]['vis2folder'] = './results_' + model[1]['name'] + '/'
-model[1]['nLabels'] = 304
+model[1]['nLabels'] = 468
 
 
 # Model 3: caffenet initialized with the same image as cliqueCNN
