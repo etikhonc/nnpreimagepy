@@ -58,7 +58,11 @@ class VideoNet(object):
         # layer 0
         n.data = self.data
         # layer 1
-        n.conv1 = L.Convolution(n.data, kernel_size=11, num_output=96, stride=4)
+        n.conv1 = L.Convolution(n.data, kernel_size=11, num_output=96, stride=4,
+                                weight_filler=dict(type='gaussian', std=0.01),
+                                bias_filler=dict(type='constant', value=0),
+                                param=[dict(lr_mult=0.1, decay_mult=1),
+                                       dict(lr_mult=0.2, decay_mult=0)])
         self.receptiveFieldStride.append(4)
         if self.last_layer == 'conv1':
             self.__network_end(n, n.conv1, params)
@@ -83,7 +87,11 @@ class VideoNet(object):
             return
 
         # layer 2
-        n.conv2 = L.Convolution(n.norm1, kernel_size=5, num_output=256, pad=2, group=2)
+        n.conv2 = L.Convolution(n.norm1, kernel_size=5, num_output=256, pad=2, group=2,
+                                weight_filler=dict(type='gaussian', std=0.01),
+                                bias_filler=dict(type='constant', value=0),
+                                param=[dict(lr_mult=0.1, decay_mult=1),
+                                       dict(lr_mult=0.2, decay_mult=0)])
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv2':
             self.__network_end(n, n.conv2, params)
@@ -108,7 +116,11 @@ class VideoNet(object):
             return
 
         # layer 3
-        n.conv3 = L.Convolution(n.norm2, kernel_size=3, num_output=384, pad=1)
+        n.conv3 = L.Convolution(n.norm2, kernel_size=3, num_output=384, pad=1,
+                                weight_filler=dict(type='gaussian', std=0.01),
+                                bias_filler=dict(type='constant', value=0),
+                                param=[dict(lr_mult=0.1, decay_mult=1),
+                                       dict(lr_mult=0.2, decay_mult=0)])
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv3':
             self.__network_end(n, n.conv3, params)
@@ -121,7 +133,11 @@ class VideoNet(object):
             return
 
         # layer 4
-        n.conv4 = L.Convolution(n.relu3, kernel_size=3, num_output=384, pad=1, group=2)
+        n.conv4 = L.Convolution(n.relu3, kernel_size=3, num_output=384, pad=1, group=2,
+                                weight_filler=dict(type='gaussian', std=0.01),
+                                bias_filler=dict(type='constant', value=0),
+                                param=[dict(lr_mult=0.1, decay_mult=1),
+                                      dict(lr_mult=0.2, decay_mult=0)])
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv4':
             self.__network_end(n, n.conv4, params)
@@ -134,7 +150,11 @@ class VideoNet(object):
             return
 
         # layer 5
-        n.conv5 = L.Convolution(n.relu4, kernel_size=3, num_output=256, pad=1, group=2)
+        n.conv5 = L.Convolution(n.relu4, kernel_size=3, num_output=256, pad=1, group=2,
+                                weight_filler=dict(type='gaussian', std=0.01),
+                                bias_filler=dict(type='constant', value=0),
+                                param=[dict(lr_mult=0.1, decay_mult=1),
+                                       dict(lr_mult=0.2, decay_mult=0)])
         self.receptiveFieldStride.append(1)
         if self.last_layer == 'conv5':
             self.__network_end(n, n.conv5, params)
