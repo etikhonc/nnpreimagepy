@@ -347,7 +347,7 @@ def save_image(output_folder, filename, img):
 def optimization_run(optparams, debug=True):
     # create a plot for all results:
     nrow = settings.nModels
-    ncol = 9
+    ncol = 8
     # figure
     plt.ioff()
     f1, axs = plt.subplots(nrows=nrow, ncols=ncol)
@@ -362,7 +362,7 @@ def optimization_run(optparams, debug=True):
             plt.axis('off')
 
     # columns names
-    cols = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'pool5', 'fc6', 'fc7', 'fc8']
+    cols = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'pool5', 'fc6', 'fc7']
     for ax, col in zip(axs[0], cols):
         ax.set_title(col)
     # for m in range(settings.nModels):

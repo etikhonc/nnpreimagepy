@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-""" AlexNet as a Class"""
+""" CaffeNet as a Class"""
 
 import os
 import numpy as np
@@ -10,7 +10,7 @@ from caffe.proto import caffe_pb2  # for solver definition
 
 
 # -----------------------------------------------------------------------------
-class AlexNet(object):
+class CaffeNet(object):
     """ Constructor """
 
     def __init__(self, data_shape, label_shape, last_layer='fc8', params=[]):
